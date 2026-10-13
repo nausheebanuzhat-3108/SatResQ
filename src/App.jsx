@@ -44,6 +44,7 @@ import {
 } from '../shared/core'
 
 import * as db from './store'
+import { uploadLocalMedia } from './mediaSync'
 
 
 /* =========================================================
@@ -741,6 +742,54 @@ export default function App() {
 
 
           setBackend(true)
+
+
+          /*
+           * Critical emergency data is already confirmed at this point.
+           * Rich media is sent separately so a photo or voice note never
+           * makes the compact emergency packet larger or blocks delivery.
+           */
+          try {
+            const mediaResult =
+              await uploadLocalMedia(id)
+
+            if (
+              mediaResult.photo ||
+              mediaResult.voice
+            ) {
+              db.update(
+                id,
+                (item) =>
+                  db.event(
+                    item,
+                    `Rich media delivered · ${[
+                      mediaResult.photo
+                        ? 'photo'
+                        : '',
+                      mediaResult.voice
+                        ? 'voice'
+                        : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' + ')}`
+                  )
+              )
+            }
+          } catch (mediaError) {
+            db.update(
+              id,
+              (item) =>
+                db.event(
+                  item,
+                  'Critical request delivered; photo/voice remains stored locally for later retry'
+                )
+            )
+
+            notify(
+              'Request delivered. Photo or voice could not upload yet and remains stored on this device.'
+            )
+          }
+
 
           refreshRemote()
         } catch (error) {
