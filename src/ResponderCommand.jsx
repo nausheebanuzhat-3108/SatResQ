@@ -1,17 +1,21 @@
+import { useState } from 'react'
+
 import {
   Activity,
   ArrowRight,
-  Car,
   CheckCircle2,
   Clock,
   FileText,
-  Fuel,
   MapPin,
   Radio,
   RefreshCw,
   ShieldCheck,
   Signal,
   TriangleAlert,
+  Camera,
+  Mic,
+  Paperclip,
+  LoaderCircle,
 } from 'lucide-react'
 
 import {
@@ -19,6 +23,10 @@ import {
   stages,
   triage,
 } from '../shared/core'
+
+import {
+  fetchRemoteMedia,
+} from './mediaSync'
 
 const date = (value) =>
   value
@@ -118,6 +126,89 @@ export default function ResponderCommand({
   refreshRemote,
   advance,
 }) {
+  const [mediaById, setMediaById] =
+    useState({})
+
+  const [mediaOpen, setMediaOpen] =
+    useState({})
+
+  const [mediaBusy, setMediaBusy] =
+    useState('')
+
+  const [mediaErrors, setMediaErrors] =
+    useState({})
+
+
+  async function toggleEvidence(
+    request
+  ) {
+    const id = request.id
+
+    if (mediaOpen[id]) {
+      setMediaOpen(
+        (current) => ({
+          ...current,
+          [id]: false,
+        })
+      )
+
+      return
+    }
+
+
+    setMediaOpen(
+      (current) => ({
+        ...current,
+        [id]: true,
+      })
+    )
+
+
+    if (
+      mediaById[id] ||
+      !(
+        request.media?.photo ||
+        request.media?.voice
+      )
+    ) {
+      return
+    }
+
+
+    setMediaBusy(id)
+
+    setMediaErrors(
+      (current) => ({
+        ...current,
+        [id]: '',
+      })
+    )
+
+
+    try {
+      const result =
+        await fetchRemoteMedia(id)
+
+      setMediaById(
+        (current) => ({
+          ...current,
+          [id]: result,
+        })
+      )
+    } catch (error) {
+      setMediaErrors(
+        (current) => ({
+          ...current,
+          [id]:
+            error.message ||
+            'Could not load evidence',
+        })
+      )
+    } finally {
+      setMediaBusy('')
+    }
+  }
+
   const visibleRequests = [
     ...remote,
   ]
@@ -180,6 +271,8 @@ export default function ResponderCommand({
 
   return (
     <>
+      {/* COMMAND CENTRE HEADER */}
+
       <section className="responder-hero">
         <div>
           <span className="eyebrow">
@@ -236,6 +329,8 @@ export default function ResponderCommand({
         </div>
       </section>
 
+      {/* COMMAND CENTRE STATS */}
+
       <section className="responder-stats">
         <Stat
           icon={Activity}
@@ -262,6 +357,8 @@ export default function ResponderCommand({
         />
       </section>
 
+      {/* HONEST PROTOTYPE NOTICE */}
+
       <section className="responder-note">
         <Radio size={18} />
 
@@ -276,6 +373,8 @@ export default function ResponderCommand({
           is connected.
         </span>
       </section>
+
+      {/* REQUESTS */}
 
       <section className="command-grid">
         {visibleRequests.map(
@@ -318,23 +417,25 @@ export default function ResponderCommand({
                     ? 'Safety uncertain'
                     : 'No immediate danger'
 
-            const vehicleProfile =
-              request.vehicleProfile &&
-              typeof request.vehicleProfile ===
-                'object'
-                ? request.vehicleProfile
-                : null
+            const hasPhoto =
+              !!request.media?.photo
 
-            const vehicleName =
-              vehicleProfile
-                ? [
-                    vehicleProfile.make,
-                    vehicleProfile.model,
-                  ]
-                    .filter(Boolean)
-                    .join(' ') ||
-                  request.vehicle
-                : request.vehicle
+            const hasVoice =
+              !!request.media?.voice
+
+            const hasMedia =
+              hasPhoto ||
+              hasVoice
+
+            const media =
+              mediaById[
+                request.id
+              ]
+
+            const evidenceOpen =
+              !!mediaOpen[
+                request.id
+              ]
 
             return (
               <article
@@ -346,6 +447,8 @@ export default function ResponderCommand({
                     : '')
                 }
               >
+                {/* CASE HEADER */}
+
                 <div className="command-card-head">
                   <div>
                     <span className="mono">
@@ -367,6 +470,8 @@ export default function ResponderCommand({
                   />
                 </div>
 
+                {/* REQUEST TITLE */}
+
                 <div className="command-title-row">
                   <div>
                     <span className="eyebrow">
@@ -379,7 +484,7 @@ export default function ResponderCommand({
                     </h3>
 
                     <p>
-                      {vehicleName}
+                      {request.vehicle}
                       {' · '}
                       {assessment.help}
                     </p>
@@ -395,6 +500,8 @@ export default function ResponderCommand({
                     </span>
                   </div>
                 </div>
+
+                {/* REQUEST FACTS */}
 
                 <div className="command-facts">
                   <div>
@@ -488,92 +595,7 @@ export default function ResponderCommand({
                   </div>
                 </div>
 
-                {vehicleProfile && (
-                  <section className="command-vehicle-profile">
-                    <div className="command-vehicle-profile-head">
-                      <div>
-                        <span className="command-vehicle-profile-icon">
-                          <Car size={19} />
-                        </span>
-
-                        <span>
-                          <small>
-                            VEHICLE PROFILE RECEIVED
-                          </small>
-
-                          <b>
-                            {vehicleName}
-                          </b>
-                        </span>
-                      </div>
-
-                      <span className="command-packet-version">
-                        PACKET V
-                        {request.packet?.v || 2}
-                      </span>
-                    </div>
-
-                    <div className="command-vehicle-profile-grid">
-                      <div>
-                        <Car size={16} />
-
-                        <span>
-                          <small>
-                            VEHICLE TYPE
-                          </small>
-
-                          <b>
-                            {request.vehicle}
-                          </b>
-                        </span>
-                      </div>
-
-                      <div>
-                        <FileText size={16} />
-
-                        <span>
-                          <small>
-                            REGISTRATION
-                          </small>
-
-                          <b>
-                            {vehicleProfile.registration ||
-                              'Not provided'}
-                          </b>
-                        </span>
-                      </div>
-
-                      <div>
-                        <Fuel size={16} />
-
-                        <span>
-                          <small>
-                            FUEL / POWER
-                          </small>
-
-                          <b>
-                            {vehicleProfile.fuelType ||
-                              'Not provided'}
-                          </b>
-                        </span>
-                      </div>
-
-                      <div>
-                        <ShieldCheck size={16} />
-
-                        <span>
-                          <small>
-                            PROFILE STATUS
-                          </small>
-
-                          <b>
-                            Included in request
-                          </b>
-                        </span>
-                      </div>
-                    </div>
-                  </section>
-                )}
+                {/* TRAVELLER NOTE */}
 
                 {request.notes && (
                   <div className="command-notes">
@@ -586,6 +608,175 @@ export default function ResponderCommand({
                     </p>
                   </div>
                 )}
+
+                {/* PHOTO + VOICE EVIDENCE */}
+
+                <section className="command-evidence">
+                  <div className="command-evidence-head">
+                    <div>
+                      <span className="command-evidence-icon">
+                        <Paperclip size={17} />
+                      </span>
+
+                      <span>
+                        <small>
+                          BREAKDOWN EVIDENCE
+                        </small>
+
+                        <b>
+                          {hasMedia
+                            ? 'Traveller added rich media'
+                            : 'No media attached'}
+                        </b>
+                      </span>
+                    </div>
+
+                    <div className="command-evidence-badges">
+                      <span
+                        className={
+                          hasPhoto
+                            ? 'available'
+                            : ''
+                        }
+                      >
+                        <Camera size={14} />
+                        Photo
+                      </span>
+
+                      <span
+                        className={
+                          hasVoice
+                            ? 'available'
+                            : ''
+                        }
+                      >
+                        <Mic size={14} />
+                        Voice
+                      </span>
+                    </div>
+                  </div>
+
+                  {hasMedia && (
+                    <button
+                      type="button"
+                      className="btn secondary command-evidence-button"
+                      disabled={
+                        mediaBusy ===
+                        request.id
+                      }
+                      onClick={() =>
+                        toggleEvidence(
+                          request
+                        )
+                      }
+                    >
+                      {mediaBusy ===
+                      request.id ? (
+                        <>
+                          <LoaderCircle
+                            size={16}
+                          />
+                          Loading evidence…
+                        </>
+                      ) : evidenceOpen ? (
+                        'Hide evidence'
+                      ) : (
+                        'View photo / voice'
+                      )}
+                    </button>
+                  )}
+
+                  {evidenceOpen && (
+                    <div className="command-evidence-body">
+                      {mediaErrors[
+                        request.id
+                      ] && (
+                        <p className="command-evidence-error">
+                          {
+                            mediaErrors[
+                              request.id
+                            ]
+                          }
+                        </p>
+                      )}
+
+                      {!media &&
+                        mediaBusy !==
+                          request.id &&
+                        !mediaErrors[
+                          request.id
+                        ] && (
+                          <p className="muted small">
+                            Evidence is being prepared.
+                          </p>
+                        )}
+
+                      {media?.photo && (
+                        <div className="command-photo-evidence">
+                          <div className="command-media-label">
+                            <Camera size={15} />
+
+                            <span>
+                              <small>
+                                PHOTO
+                              </small>
+
+                              <b>
+                                {media.photo.name ||
+                                  'Breakdown photo'}
+                              </b>
+                            </span>
+                          </div>
+
+                          <img
+                            src={
+                              media.photo
+                                .dataUrl
+                            }
+                            alt="Traveller-provided breakdown evidence"
+                          />
+
+                          <small className="muted">
+                            Traveller-provided image · for responder context, not automated diagnosis.
+                          </small>
+                        </div>
+                      )}
+
+                      {media?.voice && (
+                        <div className="command-voice-evidence">
+                          <div className="command-media-label">
+                            <Mic size={15} />
+
+                            <span>
+                              <small>
+                                VOICE NOTE
+                              </small>
+
+                              <b>
+                                Traveller description
+                              </b>
+                            </span>
+                          </div>
+
+                          <audio
+                            controls
+                            preload="metadata"
+                            src={
+                              media.voice
+                                .dataUrl
+                            }
+                          />
+
+                          <small className="muted">
+                            Recorded by the traveller and uploaded separately from the compact emergency packet.
+                          </small>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </section>
+
+                {/* PROGRESS */}
 
                 <div className="command-progress">
                   <div className="section-title">
@@ -639,6 +830,8 @@ export default function ResponderCommand({
                     )}
                   </div>
                 </div>
+
+                {/* PACKET + ACTION */}
 
                 <div className="command-actions">
                   <div className="command-meta">

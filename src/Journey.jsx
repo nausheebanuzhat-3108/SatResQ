@@ -26,6 +26,12 @@ import {
   PackageCheck,
   Radio,
   Satellite,
+  Camera,
+  ImagePlus,
+  Trash2,
+  Mic,
+  Square,
+  Volume2,
 } from 'lucide-react'
 
 import {
@@ -44,6 +50,273 @@ import OfflineAssistant from './OfflineAssistant'
 import EmergencyHandoff from './EmergencyHandoff'
 
 const DRAFT = 'satresq-guided-draft-v1'
+const PHOTO_PREFIX = 'satresq-breakdown-photo-v1:'
+const VOICE_PREFIX = 'satresq-breakdown-voice-v1:'
+
+const photoKey = (id) => `${PHOTO_PREFIX}${id}`
+const voiceKey = (id) => `${VOICE_PREFIX}${id}`
+
+function readPhoto(id) {
+  try {
+    const photo = JSON.parse(
+      localStorage.getItem(photoKey(id)) || 'null'
+    )
+
+    if (
+      !photo ||
+      typeof photo !== 'object' ||
+      typeof photo.dataUrl !== 'string' ||
+      !photo.dataUrl.startsWith('data:image/')
+    ) {
+      return null
+    }
+
+    return {
+      dataUrl: photo.dataUrl,
+      name:
+        typeof photo.name === 'string'
+          ? photo.name.slice(0, 120)
+          : 'Breakdown photo',
+      type:
+        typeof photo.type === 'string'
+          ? photo.type
+          : 'image/jpeg',
+      size:
+        Number.isFinite(photo.size)
+          ? photo.size
+          : 0,
+      capturedAt:
+        typeof photo.capturedAt === 'string'
+          ? photo.capturedAt
+          : new Date().toISOString(),
+    }
+  } catch {
+    return null
+  }
+}
+
+function savePhoto(id, photo) {
+  localStorage.setItem(
+    photoKey(id),
+    JSON.stringify(photo)
+  )
+}
+
+function deletePhoto(id) {
+  localStorage.removeItem(photoKey(id))
+}
+
+function readVoice(id) {
+  try {
+    const voice = JSON.parse(
+      localStorage.getItem(voiceKey(id)) || 'null'
+    )
+
+    if (
+      !voice ||
+      typeof voice !== 'object' ||
+      typeof voice.dataUrl !== 'string' ||
+      !voice.dataUrl.startsWith('data:audio/')
+    ) {
+      return null
+    }
+
+    return {
+      dataUrl: voice.dataUrl,
+      type:
+        typeof voice.type === 'string'
+          ? voice.type
+          : 'audio/webm',
+      size:
+        Number.isFinite(voice.size)
+          ? voice.size
+          : 0,
+      duration:
+        Number.isFinite(voice.duration)
+          ? voice.duration
+          : 0,
+      capturedAt:
+        typeof voice.capturedAt === 'string'
+          ? voice.capturedAt
+          : new Date().toISOString(),
+    }
+  } catch {
+    return null
+  }
+}
+
+function saveVoice(id, voice) {
+  localStorage.setItem(
+    voiceKey(id),
+    JSON.stringify(voice)
+  )
+}
+
+function deleteVoice(id) {
+  localStorage.removeItem(voiceKey(id))
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+
+    reader.onerror = () =>
+      reject(new Error('The recording could not be saved.'))
+
+    reader.onload = () => resolve(reader.result)
+    reader.readAsDataURL(blob)
+  })
+}
+
+function prettyDuration(seconds) {
+  const safe = Math.max(0, Math.round(seconds || 0))
+  return `${safe}s`
+}
+
+function prettySize(value) {
+  if (!Number.isFinite(value) || value <= 0) {
+    return 'compressed image'
+  }
+
+  if (value < 1024) {
+    return `${value} B`
+  }
+
+  if (value < 1024 * 1024) {
+    return `${Math.round(value / 1024)} KB`
+  }
+
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function compressPhoto(file) {
+  return new Promise((resolve, reject) => {
+    if (!file?.type?.startsWith('image/')) {
+      reject(new Error('Choose an image file.'))
+      return
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      reject(
+        new Error(
+          'Choose an image smaller than 10 MB.'
+        )
+      )
+      return
+    }
+
+    const reader = new FileReader()
+
+    reader.onerror = () =>
+      reject(
+        new Error(
+          'The image could not be read.'
+        )
+      )
+
+    reader.onload = () => {
+      const image = new Image()
+
+      image.onerror = () =>
+        reject(
+          new Error(
+            'The selected image could not be opened.'
+          )
+        )
+
+      image.onload = () => {
+        const maxSide = 1024
+        const scale = Math.min(
+          1,
+          maxSide /
+            Math.max(
+              image.naturalWidth,
+              image.naturalHeight
+            )
+        )
+
+        const width = Math.max(
+          1,
+          Math.round(
+            image.naturalWidth * scale
+          )
+        )
+
+        const height = Math.max(
+          1,
+          Math.round(
+            image.naturalHeight * scale
+          )
+        )
+
+        const canvas =
+          document.createElement('canvas')
+
+        canvas.width = width
+        canvas.height = height
+
+        const context =
+          canvas.getContext('2d')
+
+        if (!context) {
+          reject(
+            new Error(
+              'Image processing is unavailable in this browser.'
+            )
+          )
+          return
+        }
+
+        context.drawImage(
+          image,
+          0,
+          0,
+          width,
+          height
+        )
+
+        const dataUrl =
+          canvas.toDataURL(
+            'image/jpeg',
+            0.72
+          )
+
+        /*
+         * Keep the local attachment reasonably small.
+         * The critical emergency packet remains text-only.
+         */
+        if (dataUrl.length > 1_800_000) {
+          reject(
+            new Error(
+              'The compressed image is still too large. Try another photo.'
+            )
+          )
+          return
+        }
+
+        const approxBytes =
+          Math.round(
+            (dataUrl.length * 3) / 4
+          )
+
+        resolve({
+          dataUrl,
+          name:
+            file.name ||
+            'breakdown-photo.jpg',
+          type: 'image/jpeg',
+          size: approxBytes,
+          capturedAt:
+            new Date().toISOString(),
+        })
+      }
+
+      image.src = reader.result
+    }
+
+    reader.readAsDataURL(file)
+  })
+}
 
 const titles = [
   'The problem',
@@ -1124,6 +1397,35 @@ export function ReportJourney({
     return fresh
   })
 
+  const [photo, setPhoto] = useState(
+    () => readPhoto(report.id)
+  )
+
+  const [photoBusy, setPhotoBusy] =
+    useState(false)
+
+  const photoInput = useRef(null)
+
+  const [voice, setVoice] = useState(
+    () => readVoice(report.id)
+  )
+
+  const [recording, setRecording] =
+    useState(false)
+
+  const [voiceBusy, setVoiceBusy] =
+    useState(false)
+
+  const [recordSeconds, setRecordSeconds] =
+    useState(0)
+
+  const mediaRecorder = useRef(null)
+  const mediaStream = useRef(null)
+  const audioChunks = useRef([])
+  const recordingTimer = useRef(null)
+  const recordingStopTimer = useRef(null)
+  const recordingStartedAt = useRef(0)
+
   const [useSavedVehicle, setUseSavedVehicle] =
     useState(() => {
       const draft = readDraft()
@@ -1164,6 +1466,24 @@ export function ReportJourney({
 
     return () => {
       mounted.current = false
+
+      clearInterval(recordingTimer.current)
+      clearTimeout(recordingStopTimer.current)
+
+      if (
+        mediaRecorder.current &&
+        mediaRecorder.current.state !== 'inactive'
+      ) {
+        try {
+          mediaRecorder.current.stop()
+        } catch {
+          // recorder may already be closing
+        }
+      }
+
+      mediaStream.current
+        ?.getTracks()
+        .forEach((track) => track.stop())
 
       document.body.style.overflow =
         previous
@@ -1233,6 +1553,243 @@ export function ReportJourney({
 
     setUseSavedVehicle(false)
     setError('')
+  }
+
+  async function addPhoto(event) {
+    const file =
+      event.target.files?.[0]
+
+    /*
+     * Reset the file input so the same image can
+     * be selected again after removing it.
+     */
+    event.target.value = ''
+
+    if (!file) return
+
+    setPhotoBusy(true)
+    setError('')
+
+    try {
+      const prepared =
+        await compressPhoto(file)
+
+      savePhoto(
+        report.id,
+        prepared
+      )
+
+      setPhoto(prepared)
+    } catch (photoError) {
+      setError(
+        photoError.message ||
+          'Could not save the image.'
+      )
+    } finally {
+      setPhotoBusy(false)
+    }
+  }
+
+  function removePhoto() {
+    try {
+      deletePhoto(report.id)
+      setPhoto(null)
+      setError('')
+    } catch {
+      setError(
+        'The image could not be removed from local storage.'
+      )
+    }
+  }
+
+  function stopVoiceRecording() {
+    clearTimeout(recordingStopTimer.current)
+
+    if (
+      mediaRecorder.current &&
+      mediaRecorder.current.state !== 'inactive'
+    ) {
+      mediaRecorder.current.stop()
+    }
+  }
+
+  async function startVoiceRecording() {
+    if (
+      !navigator.mediaDevices?.getUserMedia ||
+      typeof MediaRecorder === 'undefined'
+    ) {
+      setError(
+        'Voice recording is not supported in this browser.'
+      )
+      return
+    }
+
+    setError('')
+    setVoiceBusy(true)
+    setRecordSeconds(0)
+
+    try {
+      const stream =
+        await navigator.mediaDevices.getUserMedia({
+          audio: true,
+        })
+
+      mediaStream.current = stream
+
+      const preferred = [
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/mp4',
+      ].find((type) =>
+        MediaRecorder.isTypeSupported?.(type)
+      )
+
+      const options = {
+        audioBitsPerSecond: 24000,
+        ...(preferred
+          ? { mimeType: preferred }
+          : {}),
+      }
+
+      const recorder =
+        new MediaRecorder(stream, options)
+
+      mediaRecorder.current = recorder
+      audioChunks.current = []
+      recordingStartedAt.current = Date.now()
+
+      recorder.ondataavailable = (event) => {
+        if (event.data?.size) {
+          audioChunks.current.push(event.data)
+        }
+      }
+
+      recorder.onerror = () => {
+        setError('Voice recording failed. Please try again.')
+      }
+
+      recorder.onstop = async () => {
+        clearInterval(recordingTimer.current)
+        clearTimeout(recordingStopTimer.current)
+
+        const duration = Math.max(
+          1,
+          Math.round(
+            (Date.now() - recordingStartedAt.current) /
+              1000
+          )
+        )
+
+        const blob = new Blob(
+          audioChunks.current,
+          {
+            type:
+              recorder.mimeType ||
+              preferred ||
+              'audio/webm',
+          }
+        )
+
+        try {
+          if (!blob.size) {
+            throw new Error(
+              'No audio was captured. Please try again.'
+            )
+          }
+
+          if (blob.size > 750 * 1024) {
+            throw new Error(
+              'The recording is too large. Keep the voice note short.'
+            )
+          }
+
+          const dataUrl =
+            await blobToDataUrl(blob)
+
+          const prepared = {
+            dataUrl,
+            type: blob.type || 'audio/webm',
+            size: blob.size,
+            duration,
+            capturedAt:
+              new Date().toISOString(),
+          }
+
+          saveVoice(
+            report.id,
+            prepared
+          )
+
+          if (mounted.current) {
+            setVoice(prepared)
+            setError('')
+          }
+        } catch (voiceError) {
+          if (mounted.current) {
+            setError(
+              voiceError.message ||
+                'Could not save the voice note.'
+            )
+          }
+        } finally {
+          stream
+            .getTracks()
+            .forEach((track) => track.stop())
+
+          mediaStream.current = null
+          mediaRecorder.current = null
+          audioChunks.current = []
+
+          if (mounted.current) {
+            setRecording(false)
+            setVoiceBusy(false)
+          }
+        }
+      }
+
+      recorder.start(500)
+      setRecording(true)
+      setVoiceBusy(false)
+
+      recordingTimer.current = setInterval(
+        () => {
+          setRecordSeconds((current) =>
+            Math.min(current + 1, 20)
+          )
+        },
+        1000
+      )
+
+      recordingStopTimer.current = setTimeout(
+        stopVoiceRecording,
+        20000
+      )
+    } catch {
+      mediaStream.current
+        ?.getTracks()
+        .forEach((track) => track.stop())
+
+      mediaStream.current = null
+      setVoiceBusy(false)
+      setRecording(false)
+
+      setError(
+        'Microphone permission is required to record a voice note.'
+      )
+    }
+  }
+
+  function removeVoice() {
+    try {
+      deleteVoice(report.id)
+      setVoice(null)
+      setRecordSeconds(0)
+      setError('')
+    } catch {
+      setError(
+        'The voice note could not be removed from local storage.'
+      )
+    }
   }
 
   function next() {
@@ -1768,6 +2325,230 @@ export function ReportJourney({
                   )}
                 </div>
 
+                <section className="breakdown-media-card">
+                  <div className="breakdown-media-head">
+                    <span className="breakdown-media-icon">
+                      <Camera size={21} />
+                    </span>
+
+                    <span>
+                      <small>
+                        PHOTO-ASSISTED REPORTING
+                      </small>
+
+                      <b>
+                        Can't explain the problem clearly?
+                      </b>
+
+                      <em>
+                        Add a photo of what you can see.
+                      </em>
+                    </span>
+                  </div>
+
+                  <input
+                    ref={photoInput}
+                    className="breakdown-photo-input"
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={addPhoto}
+                  />
+
+                  {!photo ? (
+                    <button
+                      type="button"
+                      className="breakdown-photo-add"
+                      disabled={photoBusy}
+                      onClick={() =>
+                        photoInput.current?.click()
+                      }
+                    >
+                      <ImagePlus size={19} />
+
+                      {photoBusy
+                        ? 'Preparing photo…'
+                        : 'Take / upload photo'}
+                    </button>
+                  ) : (
+                    <div className="breakdown-photo-preview">
+                      <img
+                        src={photo.dataUrl}
+                        alt="Breakdown attachment preview"
+                      />
+
+                      <div>
+                        <b>
+                          Photo attached
+                        </b>
+
+                        <small>
+                          {prettySize(photo.size)}
+                          {' · '}
+                          stored locally
+                        </small>
+
+                        <p>
+                          This image stays linked to this
+                          request on this device. It is not
+                          placed inside the compact
+                          emergency packet.
+                        </p>
+
+                        <div className="breakdown-photo-actions">
+                          <button
+                            type="button"
+                            className="btn secondary"
+                            disabled={photoBusy}
+                            onClick={() =>
+                              photoInput.current?.click()
+                            }
+                          >
+                            <Camera size={16} />
+
+                            Replace
+                          </button>
+
+                          <button
+                            type="button"
+                            className="text-btn danger-text"
+                            onClick={removePhoto}
+                          >
+                            <Trash2 size={16} />
+
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <small className="breakdown-media-note">
+                    Useful for visible damage, warning
+                    lights, smoke/steam, leaks or a flat
+                    tyre. The photo does not diagnose the
+                    vehicle.
+                  </small>
+                </section>
+
+                <section className="breakdown-media-card voice-report-card">
+                  <div className="breakdown-media-head">
+                    <span className="breakdown-media-icon">
+                      <Mic size={21} />
+                    </span>
+
+                    <span>
+                      <small>
+                        VOICE-ASSISTED REPORTING
+                      </small>
+
+                      <b>
+                        Easier to say than type?
+                      </b>
+
+                      <em>
+                        Record a short description of what happened.
+                      </em>
+                    </span>
+                  </div>
+
+                  {!voice ? (
+                    <div className="voice-recorder-empty">
+                      {!recording ? (
+                        <button
+                          type="button"
+                          className="breakdown-photo-add"
+                          disabled={voiceBusy}
+                          onClick={startVoiceRecording}
+                        >
+                          <Mic size={19} />
+
+                          {voiceBusy
+                            ? 'Opening microphone…'
+                            : 'Record voice note'}
+                        </button>
+                      ) : (
+                        <div className="voice-recording-live">
+                          <span className="voice-recording-dot" />
+
+                          <span>
+                            <b>Recording…</b>
+                            <small>
+                              {recordSeconds}s / 20s maximum
+                            </small>
+                          </span>
+
+                          <button
+                            type="button"
+                            className="btn primary"
+                            onClick={stopVoiceRecording}
+                          >
+                            <Square size={15} fill="currentColor" />
+                            Stop & save
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="voice-note-preview">
+                      <span className="voice-note-icon">
+                        <Volume2 size={22} />
+                      </span>
+
+                      <div>
+                        <b>Voice note attached</b>
+
+                        <small>
+                          {prettyDuration(voice.duration)}
+                          {' · '}
+                          {prettySize(voice.size)}
+                          {' · '}
+                          stored locally
+                        </small>
+
+                        <audio
+                          controls
+                          preload="metadata"
+                          src={voice.dataUrl}
+                        />
+
+                        <p>
+                          The voice note stays outside the
+                          compact emergency packet and can be
+                          transferred separately when a suitable
+                          connection is available.
+                        </p>
+
+                        <div className="breakdown-photo-actions">
+                          <button
+                            type="button"
+                            className="btn secondary"
+                            onClick={startVoiceRecording}
+                          >
+                            <Mic size={16} />
+                            Record again
+                          </button>
+
+                          <button
+                            type="button"
+                            className="text-btn danger-text"
+                            onClick={removeVoice}
+                          >
+                            <Trash2 size={16} />
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <small className="breakdown-media-note">
+                    Keep it short: what happened, what you can
+                    hear or see, and anything unusual. Maximum
+                    recording time is 20 seconds.
+                  </small>
+                </section>
+
                 {report.issue && (
                   <OfflineAssistant
                     report={report}
@@ -2138,6 +2919,77 @@ export function ReportJourney({
                     )}
                   </dl>
 
+                  {photo && (
+                    <div className="review-media-attachment">
+                      <img
+                        src={photo.dataUrl}
+                        alt="Attached breakdown"
+                      />
+
+                      <span>
+                        <small>
+                          BREAKDOWN PHOTO
+                        </small>
+
+                        <b>
+                          Visual evidence attached
+                        </b>
+
+                        <em>
+                          {prettySize(photo.size)}
+                          {' · '}
+                          stored on this device
+                        </em>
+                      </span>
+
+                      <button
+                        type="button"
+                        className="text-btn"
+                        onClick={() =>
+                          setStep(0)
+                        }
+                      >
+                        Edit
+                      </button>
+                    </div>
+                  )}
+
+                  {voice && (
+                    <div className="review-media-attachment review-voice-attachment">
+                      <span className="voice-note-icon">
+                        <Volume2 size={21} />
+                      </span>
+
+                      <span>
+                        <small>
+                          VOICE NOTE
+                        </small>
+
+                        <b>
+                          Spoken description attached
+                        </b>
+
+                        <em>
+                          {prettyDuration(voice.duration)}
+                          {' · '}
+                          {prettySize(voice.size)}
+                          {' · '}
+                          stored on this device
+                        </em>
+                      </span>
+
+                      <button
+                        type="button"
+                        className="text-btn"
+                        onClick={() =>
+                          setStep(0)
+                        }
+                      >
+                        Edit
+                      </button>
+                    </div>
+                  )}
+
                   {report.vehicleProfile && (
                     <div className="profile-link-note">
                       <Car size={18} />
@@ -2177,6 +3029,24 @@ export function ReportJourney({
                     </span>
                   </div>
                 </div>
+
+                {(photo || voice) && (
+                  <div className="wizard-note">
+                    {voice ? (
+                      <Volume2 size={20} />
+                    ) : (
+                      <Camera size={20} />
+                    )}
+
+                    <p>
+                      Your photo and/or voice note are saved
+                      locally as rich evidence. The compact
+                      emergency packet stays lightweight;
+                      media can be transferred separately
+                      when a suitable connection is available.
+                    </p>
+                  </div>
+                )}
 
                 <RescueSummaryCard
                   report={report}

@@ -1185,3 +1185,246 @@
   }
 
 }
+/* =========================================================
+   RESPONDER — RICH MEDIA EVIDENCE
+   ========================================================= */
+
+.command-evidence {
+  margin-top: 16px;
+  padding: 16px;
+
+  border: 1px solid rgba(23, 70, 65, 0.14);
+  border-radius: 18px;
+
+  background: rgba(246, 249, 241, 0.82);
+}
+
+
+.command-evidence-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+
+.command-evidence-head > div:first-child {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+
+.command-evidence-icon {
+  width: 38px;
+  height: 38px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  flex-shrink: 0;
+
+  border-radius: 12px;
+
+  background: #e8f3d0;
+  color: #173f3c;
+}
+
+
+.command-evidence-head small {
+  display: block;
+
+  color: #74807d;
+
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+
+.command-evidence-head b {
+  display: block;
+
+  margin-top: 2px;
+
+  color: #173f3c;
+  font-size: 14px;
+}
+
+
+.command-evidence-badges {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+
+.command-evidence-badges span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+
+  padding: 6px 9px;
+
+  border-radius: 999px;
+
+  background: #eef1ec;
+  color: #85908d;
+
+  font-size: 11px;
+  font-weight: 750;
+}
+
+
+.command-evidence-badges span.available {
+  background: #e4f1c8;
+  color: #244a42;
+}
+
+
+.command-evidence-button {
+  margin-top: 13px;
+}
+
+
+.command-evidence-button svg {
+  flex-shrink: 0;
+}
+
+
+.command-evidence-body {
+  margin-top: 14px;
+
+  display: grid;
+  gap: 14px;
+}
+
+
+.command-evidence-error {
+  margin: 0;
+  padding: 10px 12px;
+
+  border-radius: 11px;
+
+  background: rgba(176, 65, 65, 0.08);
+  color: #963b3b;
+
+  font-size: 12px;
+}
+
+
+/* =========================================================
+   RESPONDER PHOTO
+   ========================================================= */
+
+.command-photo-evidence,
+.command-voice-evidence {
+  padding: 13px;
+
+  border: 1px solid rgba(23, 70, 65, 0.12);
+  border-radius: 15px;
+
+  background: #ffffff;
+}
+
+
+.command-media-label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+
+  margin-bottom: 11px;
+
+  color: #234941;
+}
+
+
+.command-media-label > span {
+  display: flex;
+  flex-direction: column;
+}
+
+
+.command-media-label small {
+  color: #7b8683;
+
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+}
+
+
+.command-media-label b {
+  margin-top: 1px;
+
+  color: #173f3c;
+  font-size: 13px;
+}
+
+
+.command-photo-evidence img {
+  width: 100%;
+  max-height: 360px;
+
+  display: block;
+
+  object-fit: contain;
+
+  border-radius: 12px;
+
+  background: #eef1ec;
+}
+
+
+.command-photo-evidence > small,
+.command-voice-evidence > small {
+  display: block;
+
+  margin-top: 9px;
+
+  line-height: 1.45;
+}
+
+
+/* =========================================================
+   RESPONDER VOICE
+   ========================================================= */
+
+.command-voice-evidence audio {
+  width: 100%;
+  max-width: 520px;
+
+  display: block;
+
+  margin-top: 4px;
+}
+
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 620px) {
+
+  .command-evidence-head {
+    flex-direction: column;
+  }
+
+
+  .command-evidence-badges {
+    width: 100%;
+  }
+
+
+  .command-evidence-button {
+    width: 100%;
+    justify-content: center;
+  }
+
+
+  .command-photo-evidence img {
+    max-height: 260px;
+  }
+}
