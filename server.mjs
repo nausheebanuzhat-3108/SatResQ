@@ -1,5 +1,8 @@
 import express from 'express'
-import { fileURLToPath } from 'node:url'
+
+import {
+  fileURLToPath,
+} from 'node:url'
 
 import {
   mkdirSync,
@@ -9,7 +12,9 @@ import {
   renameSync,
 } from 'node:fs'
 
-import { resolve } from 'node:path'
+import {
+  resolve,
+} from 'node:path'
 
 import {
   decode,
@@ -19,25 +24,46 @@ import {
 } from './shared/core.js'
 
 
-export function makeServer(directory) {
-  mkdirSync(directory, {
-    recursive: true,
-  })
+/* =========================================================
+   SATRESQ SERVER
+   ========================================================= */
 
-  const file = resolve(
+export function makeServer(
+  directory
+) {
+  mkdirSync(
     directory,
-    'requests.json'
+    {
+      recursive: true,
+    }
   )
 
-  const mediaDirectory = resolve(
-    directory,
-    'media'
+
+  const file =
+    resolve(
+      directory,
+      'requests.json'
+    )
+
+
+  const mediaDirectory =
+    resolve(
+      directory,
+      'media'
+    )
+
+
+  mkdirSync(
+    mediaDirectory,
+    {
+      recursive: true,
+    }
   )
 
-  mkdirSync(mediaDirectory, {
-    recursive: true,
-  })
 
+  /* =======================================================
+     LOAD SAVED REQUESTS
+     ======================================================= */
 
   let records =
     existsSync(file)
@@ -50,15 +76,23 @@ export function makeServer(directory) {
       : []
 
 
-  if (!Array.isArray(records)) {
+  if (
+    !Array.isArray(
+      records
+    )
+  ) {
     throw new Error(
       'Invalid database; restore its backup.'
     )
   }
 
 
-  for (const record of records) {
-    decode(record.packet)
+  for (
+    const record of records
+  ) {
+    decode(
+      record.packet
+    )
 
     if (
       !stages.includes(
@@ -72,9 +106,16 @@ export function makeServer(directory) {
   }
 
 
-  const persist = (next) => {
+  /* =======================================================
+     REQUEST STORAGE
+     ======================================================= */
+
+  const persist = (
+    next
+  ) => {
     writeFileSync(
       file + '.tmp',
+
       JSON.stringify(
         next,
         null,
@@ -82,29 +123,42 @@ export function makeServer(directory) {
       )
     )
 
+
     renameSync(
       file + '.tmp',
       file
     )
 
-    records = next
+
+    records =
+      next
   }
 
 
+  /* =======================================================
+     MEDIA HELPERS
+     ======================================================= */
+
   function safeId(id) {
     return (
-      typeof id === 'string' &&
-      /^[a-zA-Z0-9-]{8,64}$/.test(id)
+      typeof id ===
+        'string' &&
+      /^[a-zA-Z0-9-]{8,64}$/.test(
+        id
+      )
     )
   }
 
 
   function mediaFile(id) {
-    if (!safeId(id)) {
+    if (
+      !safeId(id)
+    ) {
       throw new Error(
         'Invalid request ID'
       )
     }
+
 
     return resolve(
       mediaDirectory,
@@ -118,12 +172,16 @@ export function makeServer(directory) {
       const path =
         mediaFile(id)
 
-      if (!existsSync(path)) {
+
+      if (
+        !existsSync(path)
+      ) {
         return {
           photo: null,
           voice: null,
         }
       }
+
 
       const value =
         JSON.parse(
@@ -133,12 +191,15 @@ export function makeServer(directory) {
           )
         )
 
+
       return {
         photo:
-          value?.photo || null,
+          value?.photo ||
+          null,
 
         voice:
-          value?.voice || null,
+          value?.voice ||
+          null,
       }
     } catch {
       return {
@@ -153,21 +214,31 @@ export function makeServer(directory) {
     const media =
       readMedia(id)
 
+
     return {
-      photo: !!media.photo,
-      voice: !!media.voice,
+      photo:
+        !!media.photo,
+
+      voice:
+        !!media.voice,
     }
   }
 
 
-  function cleanPhoto(value) {
-    if (value === null) {
+  function cleanPhoto(
+    value
+  ) {
+    if (
+      value === null
+    ) {
       return null
     }
 
+
     if (
       !value ||
-      typeof value !== 'object' ||
+      typeof value !==
+        'object' ||
       typeof value.dataUrl !==
         'string' ||
       !value.dataUrl.startsWith(
@@ -181,8 +252,8 @@ export function makeServer(directory) {
 
 
     /*
-     * The browser compresses the photo before
-     * upload. This limit protects the demo server.
+     * Protect the prototype server from
+     * unexpectedly large image uploads.
      */
     if (
       value.dataUrl.length >
@@ -194,6 +265,7 @@ export function makeServer(directory) {
         )
 
       error.status = 413
+
       throw error
     }
 
@@ -242,14 +314,20 @@ export function makeServer(directory) {
   }
 
 
-  function cleanVoice(value) {
-    if (value === null) {
+  function cleanVoice(
+    value
+  ) {
+    if (
+      value === null
+    ) {
       return null
     }
 
+
     if (
       !value ||
-      typeof value !== 'object' ||
+      typeof value !==
+        'object' ||
       typeof value.dataUrl !==
         'string' ||
       !value.dataUrl.startsWith(
@@ -262,10 +340,6 @@ export function makeServer(directory) {
     }
 
 
-    /*
-     * 20-second voice notes are deliberately
-     * kept small by the traveller app.
-     */
     if (
       value.dataUrl.length >
       1_100_000
@@ -276,6 +350,7 @@ export function makeServer(directory) {
         )
 
       error.status = 413
+
       throw error
     }
 
@@ -334,8 +409,10 @@ export function makeServer(directory) {
     const path =
       mediaFile(id)
 
+
     writeFileSync(
       path + '.tmp',
+
       JSON.stringify(
         media,
         null,
@@ -343,12 +420,17 @@ export function makeServer(directory) {
       )
     )
 
+
     renameSync(
       path + '.tmp',
       path
     )
   }
 
+
+  /* =======================================================
+     EXPRESS
+     ======================================================= */
 
   const app =
     express()
@@ -360,8 +442,25 @@ export function makeServer(directory) {
 
 
   /*
-   * LOCAL DEMO ORIGIN PROTECTION
+   * Required when deployed behind services
+   * such as Render's reverse proxy.
    */
+  app.set(
+    'trust proxy',
+    1
+  )
+
+
+  /* =======================================================
+     API ORIGIN PROTECTION
+
+     Allows the SatResQ frontend to talk to
+     the API when running:
+
+     - localhost
+     - deployed HTTPS domain
+     ======================================================= */
+
   app.use(
     '/api',
     (
@@ -374,77 +473,146 @@ export function makeServer(directory) {
         'no-store'
       )
 
+
       const origin =
         req.get(
           'origin'
         )
 
-      if (
-        origin &&
-        !/^http:\/\/localhost:(4173|5173)$/.test(
-          origin
-        )
-      ) {
+
+      /*
+       * Requests without an Origin header
+       * can continue.
+       */
+      if (!origin) {
+        return next()
+      }
+
+
+      try {
+        const originUrl =
+          new URL(origin)
+
+
+        const forwardedHost =
+          req
+            .get(
+              'x-forwarded-host'
+            )
+            ?.split(',')[0]
+            ?.trim()
+
+
+        const requestHost =
+          forwardedHost ||
+          req.get(
+            'host'
+          )
+
+
+        const sameHost =
+          originUrl.host ===
+          requestHost
+
+
+        const configuredOrigin =
+          process.env
+            .APP_ORIGIN
+            ?.replace(
+              /\/$/,
+              ''
+            )
+
+
+        const configuredAllowed =
+          configuredOrigin &&
+          origin ===
+            configuredOrigin
+
+
+        if (
+          !sameHost &&
+          !configuredAllowed
+        ) {
+          return res
+            .status(403)
+            .json({
+              error:
+                'SatResQ origin not allowed',
+            })
+        }
+
+
+        next()
+      } catch {
         return res
           .status(403)
           .json({
             error:
-              'Local demo origin only',
+              'Invalid request origin',
           })
       }
-
-      next()
     }
   )
 
 
-  /*
-   * Rich media gets its own larger body limit.
-   *
-   * The critical emergency packet below keeps
-   * the original 8 KB limit.
-   */
+  /* =======================================================
+     BODY PARSERS
+
+     Rich media gets a larger limit.
+
+     Critical emergency packets stay at 8 KB.
+     ======================================================= */
+
   app.use(
     '/api/requests/:id/media',
+
     express.json({
-      limit: '3mb',
+      limit:
+        '3mb',
     })
   )
 
 
   app.use(
     express.json({
-      limit: '8kb',
+      limit:
+        '8kb',
     })
   )
 
 
-  /*
-   * HEALTH CHECK
-   */
+  /* =======================================================
+     HEALTH CHECK
+     ======================================================= */
+
   app.get(
     '/api/health',
+
     (
       req,
       res
     ) => {
       res.json({
         ok: true,
-        count:
+
+        requests:
           records.length,
+
+        service:
+          'SatResQ',
       })
     }
   )
 
 
-  /*
-   * RESPONDER REQUEST LIST
-   *
-   * We only include whether media exists.
-   * The actual photo/audio is fetched separately.
-   */
+  /* =======================================================
+     RESPONDER — GET REQUESTS
+     ======================================================= */
+
   app.get(
     '/api/requests',
+
     (
       req,
       res
@@ -463,7 +631,9 @@ export function makeServer(directory) {
               )
           )
           .map(
-            (record) => ({
+            (
+              record
+            ) => ({
               ...record,
 
               media:
@@ -473,28 +643,36 @@ export function makeServer(directory) {
             })
           )
 
-      res.json(result)
+
+      res.json(
+        result
+      )
     }
   )
 
 
-  /*
-   * CRITICAL EMERGENCY PACKET
-   */
+  /* =======================================================
+     TRAVELLER — SEND CRITICAL EMERGENCY PACKET
+     ======================================================= */
+
   app.post(
     '/api/requests',
+
     (
       req,
       res
     ) => {
       let report
 
+
       try {
         report =
           decode(
             req.body
           )
-      } catch (error) {
+      } catch (
+        error
+      ) {
         return res
           .status(400)
           .json({
@@ -505,18 +683,27 @@ export function makeServer(directory) {
 
 
       const packet =
-        encode(report)
+        encode(
+          report
+        )
 
 
+      /*
+       * Duplicate protection.
+       */
       const existing =
         records.find(
-          (record) =>
+          (
+            record
+          ) =>
             record.id ===
             report.id
         )
 
 
-      if (existing) {
+      if (
+        existing
+      ) {
         if (
           JSON.stringify(
             existing.packet
@@ -625,28 +812,33 @@ export function makeServer(directory) {
   )
 
 
-  /*
-   * RICH MEDIA UPLOAD
-   *
-   * Photo + voice are linked to the same
-   * roadside request ID but kept outside the
-   * compact emergency packet.
-   */
+  /* =======================================================
+     TRAVELLER — RICH MEDIA UPLOAD
+
+     Photo and voice are deliberately separate
+     from the compact emergency packet.
+     ======================================================= */
+
   app.post(
     '/api/requests/:id/media',
+
     (
       req,
       res
     ) => {
       const request =
         records.find(
-          (record) =>
+          (
+            record
+          ) =>
             record.id ===
             req.params.id
         )
 
 
-      if (!request) {
+      if (
+        !request
+      ) {
         return res
           .status(404)
           .json({
@@ -664,17 +856,21 @@ export function makeServer(directory) {
 
 
         const hasPhoto =
-          Object.prototype.hasOwnProperty.call(
-            req.body || {},
-            'photo'
-          )
+          Object.prototype
+            .hasOwnProperty
+            .call(
+              req.body || {},
+              'photo'
+            )
 
 
         const hasVoice =
-          Object.prototype.hasOwnProperty.call(
-            req.body || {},
-            'voice'
-          )
+          Object.prototype
+            .hasOwnProperty
+            .call(
+              req.body || {},
+              'voice'
+            )
 
 
         if (
@@ -728,7 +924,9 @@ export function makeServer(directory) {
               !!next.voice,
           },
         })
-      } catch (error) {
+      } catch (
+        error
+      ) {
         res
           .status(
             error.status ||
@@ -744,24 +942,30 @@ export function makeServer(directory) {
   )
 
 
-  /*
-   * RESPONDER FETCHES RICH MEDIA
-   */
+  /* =======================================================
+     RESPONDER — FETCH PHOTO / VOICE
+     ======================================================= */
+
   app.get(
     '/api/requests/:id/media',
+
     (
       req,
       res
     ) => {
       const request =
         records.find(
-          (record) =>
+          (
+            record
+          ) =>
             record.id ===
             req.params.id
         )
 
 
-      if (!request) {
+      if (
+        !request
+      ) {
         return res
           .status(404)
           .json({
@@ -791,24 +995,30 @@ export function makeServer(directory) {
   )
 
 
-  /*
-   * RESPONDER STATUS UPDATE
-   */
+  /* =======================================================
+     RESPONDER — STATUS UPDATE
+     ======================================================= */
+
   app.patch(
     '/api/requests/:id',
+
     (
       req,
       res
     ) => {
       const item =
         records.find(
-          (record) =>
+          (
+            record
+          ) =>
             record.id ===
             req.params.id
         )
 
 
-      if (!item) {
+      if (
+        !item
+      ) {
         return res
           .status(404)
           .json({
@@ -822,6 +1032,9 @@ export function makeServer(directory) {
         req.body?.stage
 
 
+      /*
+       * Already at this stage.
+       */
       if (
         desired ===
         item.stage
@@ -837,6 +1050,9 @@ export function makeServer(directory) {
       }
 
 
+      /*
+       * Stages must move one step at a time.
+       */
       if (
         stages.indexOf(
           desired
@@ -876,7 +1092,7 @@ export function makeServer(directory) {
             at: now,
 
             text:
-              'Demo operator changed status to ' +
+              'Responder changed status to ' +
               desired,
           },
         ],
@@ -886,7 +1102,9 @@ export function makeServer(directory) {
       try {
         persist(
           records.map(
-            (record) =>
+            (
+              record
+            ) =>
               record.id ===
               item.id
                 ? changed
@@ -915,24 +1133,31 @@ export function makeServer(directory) {
   )
 
 
+  /* =======================================================
+     UNKNOWN API ROUTE
+     ======================================================= */
+
   app.use(
     '/api',
+
     (
       req,
       res
-    ) =>
+    ) => {
       res
         .status(404)
         .json({
           error:
             'Unknown API route',
         })
+    }
   )
 
 
-  /*
-   * REACT BUILD
-   */
+  /* =======================================================
+     SERVE REACT / PWA
+     ======================================================= */
+
   app.use(
     express.static(
       fileURLToPath(
@@ -941,11 +1166,15 @@ export function makeServer(directory) {
           import.meta.url
         )
       ),
+
       {
         setHeaders: (
           res,
           path
         ) => {
+          /*
+           * Prevent stale PWA shell versions.
+           */
           if (
             path.endsWith(
               'sw.js'
@@ -965,6 +1194,10 @@ export function makeServer(directory) {
   )
 
 
+  /* =======================================================
+     ERROR HANDLER
+     ======================================================= */
+
   app.use(
     (
       error,
@@ -972,17 +1205,29 @@ export function makeServer(directory) {
       res,
       next
     ) => {
+      if (
+        error.status ===
+        413
+      ) {
+        return res
+          .status(413)
+          .json({
+            error:
+              'Attachment too large',
+          })
+      }
+
+
+      console.error(
+        error
+      )
+
+
       res
-        .status(
-          error.status === 413
-            ? 413
-            : 500
-        )
+        .status(500)
         .json({
           error:
-            error.status === 413
-              ? 'Attachment too large'
-              : 'Server error; receipt unconfirmed',
+            'Server error; receipt unconfirmed',
         })
     }
   )
@@ -991,6 +1236,16 @@ export function makeServer(directory) {
   return app
 }
 
+
+/* =========================================================
+   START SERVER
+
+   LOCAL:
+   http://localhost:4173
+
+   CLOUD:
+   Uses process.env.PORT supplied by host.
+   ========================================================= */
 
 if (
   process.argv[1] &&
@@ -1001,28 +1256,61 @@ if (
       import.meta.url
     )
 ) {
+  const defaultDataDirectory =
+    fileURLToPath(
+      new URL(
+        './server-data',
+        import.meta.url
+      )
+    )
+
+
+  /*
+   * Optional persistent-data path for deployment.
+   * Without DATA_DIR, the local server-data folder
+   * is used.
+   */
+  const dataDirectory =
+    process.env.DATA_DIR
+      ? resolve(
+          process.env.DATA_DIR
+        )
+      : defaultDataDirectory
+
+
+  const port =
+    Number(
+      process.env.PORT
+    ) ||
+    4173
+
+
+  const host =
+    '0.0.0.0'
+
+
   const app =
     makeServer(
-      fileURLToPath(
-        new URL(
-          './server-data',
-          import.meta.url
-        )
-      )
+      dataDirectory
     )
 
 
   app
     .listen(
-      4173,
-      'localhost',
+      port,
+      host,
+
       () => {
         console.log(
-          '\nSatResQ Pro: http://localhost:4173'
+          '\nSatResQ server started.'
         )
 
         console.log(
-          'Responder: http://localhost:4173/#dispatch'
+          `Port: ${port}`
+        )
+
+        console.log(
+          'Traveller + Responder platform ready.'
         )
 
         console.log(
@@ -1030,17 +1318,20 @@ if (
         )
 
         console.log(
-          'Local demo only. Press Ctrl+C to stop.\n'
+          'Press Ctrl+C to stop.\n'
         )
       }
     )
     .on(
       'error',
-      (error) => {
+
+      (
+        error
+      ) => {
         console.error(
           error.code ===
             'EADDRINUSE'
-            ? 'Port 4173 is busy. Stop your old preview server with Ctrl+C.'
+            ? `Port ${port} is busy. Stop the existing server with Ctrl+C.`
             : error.message
         )
 
